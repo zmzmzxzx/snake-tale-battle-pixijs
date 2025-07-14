@@ -1,14 +1,6 @@
 // --- CONFIG ---
-const BASE_WIDTH = 800, BASE_HEIGHT = 600;
-const BASE_GRID = 20;
-const BASE_COLS = 40;
-const BASE_ROWS = 30;
-
+const BASE_COLS = 20, BASE_ROWS = 30, BASE_GRID = 20;
 const COLORS = { top: 0x6bffd5, bottom: 0xff6b6b, food: 0xffd56b };
-const AI_LEVELS = [
-  "Novice", "Easy", "Normal", "Smart", "Skilled",
-  "Advanced", "Expert", "Master", "Genius", "Impossible"
-];
 
 // --- PIXI APP ---
 const app = new PIXI.Application({ backgroundColor: 0x181818, antialias: true, resolution: window.devicePixelRatio });
@@ -17,46 +9,46 @@ document.getElementById('gameContainer').appendChild(app.view);
 // --- DOM ---
 const scoreText = document.getElementById('scoreText');
 
+// --- SOUND ---
+const eatSound = new Audio('eat.mp3');
+const dieSound = new Audio('die.mp3');
+const winSound = new Audio('win.mp3');
+const clickSound = new Audio('click.mp3');
+
 // --- UTILS ---
 function gridToPixi(x, y, gridSize) { return [x * gridSize, y * gridSize]; }
 function randomGrid(cols, rows) { return { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }; }
 function arraysEqual(a, b) { return a.x === b.x && a.y === b.y; }
-function getUnlockedLevel() { return parseInt(localStorage.getItem('snake_unlocked_level') || '1', 10); }
-function setUnlockedLevel(lvl) { localStorage.setItem('snake_unlocked_level', lvl); }
 
 // --- DEVICE DETECTION ---
 const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
 
 // --- GAME VARIABLES ---
-let WIDTH = BASE_WIDTH;
-let HEIGHT = BASE_HEIGHT;
-let GRID = BASE_GRID;
-let COLS = BASE_COLS;
-let ROWS = BASE_ROWS;
+let WIDTH = 800, HEIGHT = 600, GRID = BASE_GRID, COLS = BASE_COLS, ROWS = BASE_ROWS;
 let mode = "single"; // "single" or "multi"
-let aiLevel = 1;
 let running = false;
 let currentMenu = null;
 let playerNames = { p1: "Player", p2: "AI" };
 let snakes = [];
 let foods = [];
+let aiLevel = 1;
 
 // --- RESIZE & SCALE ---
 function resizeGame() {
-  let w = window.innerWidth;
-  let h = window.innerHeight;
-
+  let w = window.innerWidth, h = window.innerHeight;
   if (mode === "multi" && isMobile) {
     WIDTH = w;
     HEIGHT = h;
-    GRID = Math.floor(WIDTH / COLS);
+    GRID = Math.floor(Math.min(WIDTH / BASE_COLS, HEIGHT / BASE_ROWS));
+    COLS = Math.floor(WIDTH / GRID);
     ROWS = Math.floor(HEIGHT / GRID);
   } else {
-    const scale = Math.min(w / BASE_WIDTH, h / BASE_HEIGHT, 1);
-    WIDTH = Math.floor(BASE_WIDTH * scale);
-    HEIGHT = Math.floor(BASE_HEIGHT * scale);
-    GRID = Math.floor(WIDTH / COLS);
-    ROWS = Math.floor(HEIGHT / GRID);
+    const scale = Math.min(w / (BASE_COLS * BASE_GRID), h / (BASE_ROWS * BASE_GRID), 1);
+    GRID = Math.floor(BASE_GRID * scale);
+    WIDTH = GRID * BASE_COLS;
+    HEIGHT = GRID * BASE_ROWS;
+    COLS = BASE_COLS;
+    ROWS = BASE_ROWS;
   }
   app.renderer.resize(WIDTH, HEIGHT);
   app.view.style.width = WIDTH + "px";
@@ -65,7 +57,7 @@ function resizeGame() {
   scoreText.style.left = "50%";
   scoreText.style.transform = "translateX(-50%)";
 }
-window.addEventListener('resize', resizeGame);
+window.addEventListener('resize', () => { resizeGame(); updateScoreDisplay(); });
 resizeGame();
 
 // --- ENTITY CLASSES ---
@@ -89,14 +81,13 @@ class Food {
 }
 
 class Snake {
-  constructor(color, x, y, controls, isAI = false, aiLevel = 1, name = '') {
+  constructor(color, x, y, controls, isAI = false, name = '') {
     this.color = color;
     this.body = [{ x, y }];
     this.dir = { x: 1, y: 0 };
     this.nextDir = { x: 1, y: 0 };
     this.grow = 3;
     this.isAI = isAI;
-    this.aiLevel = aiLevel;
     this.name = name;
     this.controls = controls;
     this.alive = true;
@@ -121,7 +112,7 @@ class Snake {
     else this.body.pop();
   }
   aiMove() {
-    // Simple AI: random movement (can be improved)
+    // Simple AI: random movement
     const directions = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
     this.nextDir = directions[Math.floor(Math.random() * directions.length)];
   }
@@ -158,15 +149,9 @@ class Snake {
   }
 }
 
-// --- GAME STATE ---
-let snakes = [], foods = [];
-
 // --- CONTROL MAPS ---
 const controlsWASD = { w: {x:0,y:-1}, a: {x:-1,y:0}, s: {x:0,y:1}, d: {x:1,y:0} };
 const controlsArrows = { ArrowUp: {x:0,y:-1}, ArrowLeft: {x:-1,y:0}, ArrowDown: {x:0,y:1}, ArrowRight: {x:1,y:0} };
-
-// --- PLAYER NAMES ---
-let playerNames = { p1: "Player", p2: "AI" };
 
 // --- RESET GAME ---
 function resetGame(selectedMode = "single") {
@@ -177,16 +162,16 @@ function resetGame(selectedMode = "single") {
 
   if (mode === "single") {
     playerNames = { p1: "Player", p2: "AI" };
-    snakes.push(new Snake(COLORS.top, 5, 5, controlsWASD, false, 1, playerNames.p1));
-    snakes.push(new Snake(COLORS.bottom, COLS - 6, ROWS - 6, controlsArrows, true, 1, playerNames.p2));
+    snakes.push(new Snake(COLORS.top, 5, 5, controlsWASD, false, playerNames.p1));
+    snakes.push(new Snake(COLORS.bottom, COLS - 6, ROWS - 6, controlsArrows, true, playerNames.p2));
   } else {
     if (isMobile) {
       playerNames = { p1: "Bottom", p2: "Top" };
     } else {
       playerNames = { p1: "WASD", p2: "Arrows" };
     }
-    snakes.push(new Snake(COLORS.bottom, 5, ROWS - 6, controlsWASD, false, 1, playerNames.p1));
-    snakes.push(new Snake(COLORS.top, COLS - 6, 5, controlsArrows, false, 1, playerNames.p2));
+    snakes.push(new Snake(COLORS.bottom, 5, ROWS - 6, controlsWASD, false, playerNames.p1));
+    snakes.push(new Snake(COLORS.top, COLS - 6, 5, controlsArrows, false, playerNames.p2));
   }
 
   for (let i = 0; i < 5; ++i) spawnFood();
@@ -317,6 +302,32 @@ function showMainMenu() {
     currentMenu = null;
     mode = "multi";
     resetGame(mode);
+  };
+}
+
+function showPauseMenu() {
+  running = false;
+  if (currentMenu) document.body.removeChild(currentMenu);
+  const menu = document.createElement('div');
+  menu.className = "menu-overlay";
+  menu.innerHTML = `
+    <h2 style="color:#00ffff;">Game Paused</h2>
+    <button id="continueBtn">Continue</button>
+    <button id="mainMenuBtn">Main Menu</button>
+  `;
+  document.body.appendChild(menu);
+  currentMenu = menu;
+  document.getElementById('continueBtn').onclick = () => {
+    clickSound.currentTime = 0; clickSound.play();
+    document.body.removeChild(menu);
+    currentMenu = null;
+    running = true;
+    requestAnimationFrame(gameLoop);
+  };
+  document.getElementById('mainMenuBtn').onclick = () => {
+    clickSound.currentTime = 0; clickSound.play();
+    document.body.removeChild(menu);
+    showMainMenu();
   };
 }
 
