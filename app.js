@@ -1,5 +1,9 @@
 // --- CONFIG ---
-const BASE_WIDTH = 800, BASE_HEIGHT = 600, BASE_GRID = 20, BASE_COLS = 40, BASE_ROWS = 30;
+const BASE_WIDTH = 800, BASE_HEIGHT = 600;
+const BASE_GRID = 20;
+const BASE_COLS = 40;
+const BASE_ROWS = 30;
+
 const COLORS = { top: 0x6bffd5, bottom: 0xff6b6b, food: 0xffd56b };
 const AI_LEVELS = [
   "Novice", "Easy", "Normal", "Smart", "Skilled",
@@ -10,18 +14,8 @@ const AI_LEVELS = [
 const app = new PIXI.Application({ backgroundColor: 0x181818, antialias: true, resolution: window.devicePixelRatio });
 document.getElementById('gameContainer').appendChild(app.view);
 
-// --- SOUNDS ---
-const eatSound = new Audio('eat.mp3');
-const dieSound = new Audio('die.mp3');
-const winSound = new Audio('win.mp3');
-const clickSound = new Audio('click.mp3');
-
-// --- SCORE DISPLAY ---
-const scoreText = new PIXI.Text('', { fontFamily: 'Segoe UI', fontSize: 28, fill: '#00ffff', fontWeight: 'bold', align: 'center' });
-scoreText.anchor.set(0.5, 0);
-scoreText.x = BASE_WIDTH / 2;
-scoreText.y = 10;
-app.stage.addChild(scoreText);
+// --- DOM ---
+const scoreText = document.getElementById('scoreText');
 
 // --- UTILS ---
 function gridToPixi(x, y, gridSize) { return [x * gridSize, y * gridSize]; }
@@ -51,14 +45,13 @@ let foods = [];
 function resizeGame() {
   let w = window.innerWidth;
   let h = window.innerHeight;
-  // For split screen in 2P mobile, keep aspect ratio and split height accordingly
+
   if (mode === "multi" && isMobile) {
     WIDTH = w;
     HEIGHT = h;
     GRID = Math.floor(WIDTH / COLS);
     ROWS = Math.floor(HEIGHT / GRID);
   } else {
-    // For single player or desktop, maintain base aspect ratio and scale down if needed
     const scale = Math.min(w / BASE_WIDTH, h / BASE_HEIGHT, 1);
     WIDTH = Math.floor(BASE_WIDTH * scale);
     HEIGHT = Math.floor(BASE_HEIGHT * scale);
@@ -68,10 +61,12 @@ function resizeGame() {
   app.renderer.resize(WIDTH, HEIGHT);
   app.view.style.width = WIDTH + "px";
   app.view.style.height = HEIGHT + "px";
-  scoreText.x = WIDTH / 2;
-  scoreText.y = 10;
+  scoreText.style.top = "10px";
+  scoreText.style.left = "50%";
+  scoreText.style.transform = "translateX(-50%)";
 }
 window.addEventListener('resize', resizeGame);
+resizeGame();
 
 // --- ENTITY CLASSES ---
 class Food {
@@ -126,7 +121,7 @@ class Snake {
     else this.body.pop();
   }
   aiMove() {
-    // Simple AI: random movement (can be enhanced)
+    // Simple AI: random movement
     const directions = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
     this.nextDir = directions[Math.floor(Math.random() * directions.length)];
   }
@@ -152,8 +147,6 @@ class Snake {
     this.gfx.removeChildren();
     for (let i = 0; i < this.body.length; ++i) {
       let seg = this.body[i], [px, py] = gridToPixi(seg.x, seg.y, GRID);
-      this.gfx.beginFill(this.color, 0.9);
-      this.gfx.lineStyle(i === 0 ? 3 : 1, 0xffffff, i === 0 ? 0.8 : 0.3);
       let box = new PIXI.Graphics();
       box.beginFill(this.color, 0.9);
       box.lineStyle(i === 0 ? 3 : 1, 0xffffff, i === 0 ? 0.8 : 0.3);
@@ -168,16 +161,20 @@ class Snake {
 // --- GAME STATE ---
 let snakes = [], foods = [];
 
-// --- CONTROL MAPPINGS ---
+// --- CONTROL MAPS ---
 const controlsWASD = { w: {x:0,y:-1}, a: {x:-1,y:0}, s: {x:0,y:1}, d: {x:1,y:0} };
 const controlsArrows = { ArrowUp: {x:0,y:-1}, ArrowLeft: {x:-1,y:0}, ArrowDown: {x:0,y:1}, ArrowRight: {x:1,y:0} };
 
-// --- GAME LOGIC ---
-function resetGame(selectedMode) {
+// --- PLAYER NAMES ---
+let playerNames = { p1: "Player", p2: "AI" };
+
+// --- RESET GAME ---
+function resetGame(selectedMode = "single") {
+  mode = selectedMode;
   for (let s of snakes) app.stage.removeChild(s.gfx);
   for (let f of foods) app.stage.removeChild(f.gfx);
   snakes = []; foods = [];
-  mode = selectedMode;
+
   if (mode === "single") {
     playerNames = { p1: "Player", p2: "AI" };
     snakes.push(new Snake(COLORS.top, 5, 5, controlsWASD, false, 1, playerNames.p1));
@@ -191,13 +188,15 @@ function resetGame(selectedMode) {
     snakes.push(new Snake(COLORS.bottom, 5, ROWS - 6, controlsWASD, false, 1, playerNames.p1));
     snakes.push(new Snake(COLORS.top, COLS - 6, 5, controlsArrows, false, 1, playerNames.p2));
   }
+
   for (let i = 0; i < 5; ++i) spawnFood();
   running = true;
-  updateScoreDisplay();
   resizeGame();
+  updateScoreDisplay();
   requestAnimationFrame(gameLoop);
 }
 
+// --- SPAWN FOOD ---
 function spawnFood() {
   let x, y, safe;
   do {
@@ -208,26 +207,25 @@ function spawnFood() {
   foods.push(new Food(x, y));
 }
 
+// --- INPUT HANDLING ---
 window.addEventListener('keydown', e => {
   if (!running) return;
-  // Player 1 (WASD or Bottom)
   if (controlsWASD[e.key]) snakes[0].setDirection(controlsWASD[e.key]);
-  // Player 2 (Arrows or Top)
   if (controlsArrows[e.key]) snakes[1].setDirection(controlsArrows[e.key]);
   if (e.key === 'Escape') showPauseMenu();
 });
 
-// --- TOUCH CONTROLS ---
-let touchStartX = 0, touchStartY = 0;
-let activePlayer = null; // 0 = bottom or player1, 1 = top or player2
+// --- TOUCH SWIPE CONTROLS ---
+let touchStartX = 0;
+let touchStartY = 0;
+let activePlayer = null;
 
 app.view.addEventListener('touchstart', e => {
   if (!running) return;
   if (e.touches.length > 0) {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
-    const h = window.innerHeight;
-    activePlayer = (touchStartY < h / 2) ? 1 : 0; // top half = player 2, bottom half = player 1
+    activePlayer = (touchStartY < window.innerHeight / 2) ? 1 : 0; // top half = player 1, bottom half = player 0
   }
 });
 
@@ -236,7 +234,8 @@ app.view.addEventListener('touchend', e => {
   if (e.changedTouches.length > 0) {
     let dx = e.changedTouches[0].clientX - touchStartX;
     let dy = e.changedTouches[0].clientY - touchStartY;
-    let absDx = Math.abs(dx), absDy = Math.abs(dy);
+    let absDx = Math.abs(dx);
+    let absDy = Math.abs(dy);
     let direction = null;
     if (absDx > absDy && absDx > 20) direction = dx > 0 ? 'right' : 'left';
     else if (absDy > absDx && absDy > 20) direction = dy > 0 ? 'down' : 'up';
@@ -287,9 +286,9 @@ function gameLoop(ts) {
 // --- SCORE DISPLAY ---
 function updateScoreDisplay() {
   if (mode === "single") {
-    scoreText.text = `${playerNames.p1}: ${snakes[0].body.length - 1}    ${playerNames.p2}: ${snakes[1].body.length - 1}`;
+    scoreText.innerText = `${playerNames.p1}: ${snakes[0].body.length - 1}    ${playerNames.p2}: ${snakes[1].body.length - 1}`;
   } else {
-    scoreText.text = `Top: ${snakes[1].body.length - 1}    Bottom: ${snakes[0].body.length - 1}`;
+    scoreText.innerText = `Top: ${snakes[1].body.length - 1}    Bottom: ${snakes[0].body.length - 1}`;
   }
 }
 
@@ -311,14 +310,14 @@ function showMainMenu() {
     document.body.removeChild(menu);
     currentMenu = null;
     mode = "single";
-    resetGame(true, 1);
+    resetGame(mode);
   };
   document.getElementById('multiBtn').onclick = () => {
     clickSound.currentTime = 0; clickSound.play();
     document.body.removeChild(menu);
     currentMenu = null;
     mode = "multi";
-    resetGame(false, 1);
+    resetGame(mode);
   };
 }
 
@@ -338,7 +337,7 @@ function showGameOverMenu(deadSnake) {
     clickSound.currentTime = 0; clickSound.play();
     document.body.removeChild(menu);
     currentMenu = null;
-    resetGame(mode === "single", aiLevel);
+    resetGame(mode);
   };
   document.getElementById('mainMenuBtn').onclick = () => {
     clickSound.currentTime = 0; clickSound.play();
@@ -347,5 +346,5 @@ function showGameOverMenu(deadSnake) {
   };
 }
 
-// --- Start Game ---
+// --- START ---
 showMainMenu();
