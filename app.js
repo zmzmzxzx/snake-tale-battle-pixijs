@@ -121,7 +121,7 @@ class Snake {
     else this.body.pop();
   }
   aiMove() {
-    // Simple AI: random movement
+    // Simple AI: random movement (can be improved)
     const directions = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
     this.nextDir = directions[Math.floor(Math.random() * directions.length)];
   }
@@ -216,8 +216,7 @@ window.addEventListener('keydown', e => {
 });
 
 // --- TOUCH SWIPE CONTROLS ---
-let touchStartX = 0;
-let touchStartY = 0;
+let touchStartX = 0, touchStartY = 0;
 let activePlayer = null;
 
 app.view.addEventListener('touchstart', e => {
@@ -225,7 +224,8 @@ app.view.addEventListener('touchstart', e => {
   if (e.touches.length > 0) {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
-    activePlayer = (touchStartY < window.innerHeight / 2) ? 1 : 0; // top half = player 1, bottom half = player 0
+    const h = window.innerHeight;
+    activePlayer = (touchStartY < h / 2) ? 1 : 0; // top half = player 2, bottom half = player 1
   }
 });
 
@@ -234,8 +234,7 @@ app.view.addEventListener('touchend', e => {
   if (e.changedTouches.length > 0) {
     let dx = e.changedTouches[0].clientX - touchStartX;
     let dy = e.changedTouches[0].clientY - touchStartY;
-    let absDx = Math.abs(dx);
-    let absDy = Math.abs(dy);
+    let absDx = Math.abs(dx), absDy = Math.abs(dy);
     let direction = null;
     if (absDx > absDy && absDx > 20) direction = dx > 0 ? 'right' : 'left';
     else if (absDy > absDx && absDy > 20) direction = dy > 0 ? 'down' : 'up';
