@@ -1,60 +1,21 @@
 // --- CONFIG ---
-const BASE_WIDTH = 800, BASE_HEIGHT = 600, BASE_GRID = 20, BASE_COLS = 40, BASE_ROWS = 30;
-const COLORS = { player: 0xff6b6b, ai: 0x6bffd5, food: 0xffd56b };
-const AI_LEVELS = [
-  "Novice", "Easy", "Normal", "Smart", "Skilled",
-  "Advanced", "Expert", "Master", "Genius", "Impossible"
-];
-
-let WIDTH = BASE_WIDTH, HEIGHT = BASE_HEIGHT, GRID = BASE_GRID, COLS = BASE_COLS, ROWS = BASE_ROWS;
+const GRID = 20;
+let WIDTH = 400, HEIGHT = 600, COLS = 20, ROWS = 30;
+const COLORS = { top: 0x6bffd5, bottom: 0xff6b6b, food: 0xffd56b };
 
 // --- PIXI APP ---
-const app = new PIXI.Application({ width: WIDTH, height: HEIGHT, backgroundColor: 0x181818, antialias: true });
+const app = new PIXI.Application({ backgroundColor: 0x181818, antialias: true, resolution: window.devicePixelRatio });
 document.getElementById('gameContainer').appendChild(app.view);
 
-// --- SOUNDS ---
-const eatSound = new Audio('eat.mp3');
-const dieSound = new Audio('die.mp3');
-const winSound = new Audio('win.mp3');
-const clickSound = new Audio('click.mp3');
-
-// --- SCORE DISPLAY ---
-const scoreText = new PIXI.Text('', {fontFamily:'Segoe UI', fontSize:28, fill:'#00ffff', fontWeight:'bold', align:'center'});
-scoreText.anchor.set(0.5, 0);
-scoreText.x = WIDTH / 2;
-scoreText.y = 10;
-app.stage.addChild(scoreText);
+// --- DOM UI ---
+const scoreTop = document.getElementById('scoreTop');
+const scoreBottom = document.getElementById('scoreBottom');
+const splitLine = document.getElementById('splitLine');
 
 // --- UTILS ---
 function gridToPixi(x, y) { return [x * GRID, y * GRID]; }
 function randomGrid() { return { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) }; }
 function arraysEqual(a, b) { return a.x === b.x && a.y === b.y; }
-function getUnlockedLevel() { return parseInt(localStorage.getItem('snake_unlocked_level') || '1', 10); }
-function setUnlockedLevel(lvl) { localStorage.setItem('snake_unlocked_level', lvl); }
-
-// --- DEVICE DETECTION ---
-let isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
-
-// --- RESPONSIVE CANVAS & GRID ---
-function resizeGame() {
-  let w = window.innerWidth, h = window.innerHeight;
-  // 4:3 ratio by default, but fill screen if needed
-  let scale = Math.min(w / BASE_WIDTH, h / BASE_HEIGHT, 1);
-  WIDTH = Math.round(BASE_WIDTH * scale);
-  HEIGHT = Math.round(BASE_HEIGHT * scale);
-  app.renderer.resize(WIDTH, HEIGHT);
-  // Dynamically scale grid and cols/rows
-  GRID = Math.floor(Math.min(WIDTH / BASE_COLS, HEIGHT / BASE_ROWS));
-  COLS = Math.floor(WIDTH / GRID);
-  ROWS = Math.floor(HEIGHT / GRID);
-  scoreText.x = WIDTH / 2;
-  scoreText.y = 10;
-}
-window.addEventListener('resize', () => {
-  resizeGame();
-  updateScoreDisplay();
-});
-resizeGame();
 
 // --- ENTITY CLASSES ---
 class Food {
@@ -77,30 +38,25 @@ class Food {
 }
 
 class Snake {
-  constructor(color, x, y, controls, isAI = false, aiLevel = 1, name = '') {
+  constructor(color, x, y, controls, name) {
     this.color = color;
     this.body = [{ x, y }];
     this.dir = { x: 1, y: 0 };
     this.nextDir = { x: 1, y: 0 };
     this.grow = 3;
-    this.isAI = isAI;
-    this.aiLevel = aiLevel;
-    this.name = name;
     this.controls = controls;
+    this.name = name;
     this.alive = true;
     this.gfx = new PIXI.Container();
     app.stage.addChild(this.gfx);
   }
-  setDirection(key) {
-    if (!this.alive || this.isAI) return;
-    const d = this.controls[key];
-    if (!d) return;
-    if (d.x === -this.dir.x && d.y === -this.dir.y) return;
-    this.nextDir = d;
-  }
-  move(foodList, snakes) {
+  setDirection(dir) {
     if (!this.alive) return;
-    if (this.isAI) this.aiMove(foodList, snakes);
+    if (dir.x === -this.dir.x && dir.y === -this.dir.y) return;
+    this.nextDir = dir;
+  }
+  move() {
+    if (!this.alive) return;
     this.dir = this.nextDir;
     let head = {
       x: (this.body[0].x + this.dir.x + COLS) % COLS,
@@ -109,88 +65,6 @@ class Snake {
     this.body.unshift(head);
     if (this.grow > 0) this.grow--;
     else this.body.pop();
-  }
-  aiMove(foodList, snakes) {
-    if (this.aiLevel <= 2) {
-      if (foodList.length && Math.random() < (this.aiLevel === 2 ? 0.7 : 0.4)) this.greedyMove(foodList);
-      else this.randomMove();
-      return;
-    }
-    this.bfsMove(foodList, snakes);
-  }
-  greedyMove(foodList) {
-    let f = foodList[0], minDist = this.dist(f);
-    for (let food of foodList) {
-      let d = this.dist(food);
-      if (d < minDist) { minDist = d; f = food; }
-    }
-    let bestDir = this.dir, bestDist = Infinity;
-    for (let d of [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}]) {
-      let nx = (this.body[0].x + d.x + COLS) % COLS, ny = (this.body[0].y + d.y + ROWS) % ROWS;
-      if (this.body.slice(0, -1).some(seg => seg.x === nx && seg.y === ny)) continue;
-      let dist = Math.abs(nx - f.x) + Math.abs(ny - f.y);
-      if (dist < bestDist) { bestDist = dist; bestDir = d; }
-    }
-    this.nextDir = bestDir;
-  }
-  randomMove() {
-    let dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}].filter(d => {
-      let nx = (this.body[0].x + d.x + COLS) % COLS, ny = (this.body[0].y + d.y + ROWS) % ROWS;
-      return !this.body.slice(0, -1).some(seg => seg.x === nx && seg.y === ny);
-    });
-    if (dirs.length) this.nextDir = dirs[Math.floor(Math.random() * dirs.length)];
-  }
-  bfsMove(foodList, snakes) {
-    let f = foodList[0], minDist = this.dist(f);
-    for (let food of foodList) {
-      let d = this.dist(food);
-      if (d < minDist) { minDist = d; f = food; }
-    }
-    let queue = [{x:this.body[0].x, y:this.body[0].y, path:[]}];
-    let visited = Array.from({length:COLS},()=>Array(ROWS).fill(false));
-    visited[this.body[0].x][this.body[0].y] = true;
-    let bodySet = new Set(this.body.slice(0, -1).map(seg => seg.x + ',' + seg.y));
-    if (this.aiLevel >= 5) {
-      for (let s of snakes) if (s !== this) s.body.forEach(seg => bodySet.add(seg.x+','+seg.y));
-    }
-    while (queue.length) {
-      let {x, y, path} = queue.shift();
-      if (x === f.x && y === f.y && path.length) {
-        let next = path[0];
-        let dx = (next.x - this.body[0].x + COLS) % COLS, dy = (next.y - this.body[0].y + ROWS) % ROWS;
-        if (dx === 1 || dx === -(COLS-1)) this.nextDir = {x:1,y:0};
-        else if (dx === -1 || dx === COLS-1) this.nextDir = {x:-1,y:0};
-        else if (dy === 1 || dy === -(ROWS-1)) this.nextDir = {x:0,y:1};
-        else if (dy === -1 || dy === ROWS-1) this.nextDir = {x:0,y:-1};
-        return;
-      }
-      for (let d of [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}]) {
-        let nx = (x + d.x + COLS) % COLS, ny = (y + d.y + ROWS) % ROWS;
-        if (visited[nx][ny]) continue;
-        if (bodySet.has(nx+','+ny)) continue;
-        visited[nx][ny] = true;
-        queue.push({x:nx, y:ny, path: path.concat({x:nx,y:ny})});
-      }
-    }
-    this.randomMove();
-  }
-  dist(food) {
-    let dx = Math.abs(this.body[0].x - food.x), dy = Math.abs(this.body[0].y - food.y);
-    dx = Math.min(dx, COLS - dx); dy = Math.min(dy, ROWS - dy);
-    return dx + dy;
-  }
-  render() {
-    this.gfx.removeChildren();
-    for (let i = 0; i < this.body.length; ++i) {
-      let seg = this.body[i], [px, py] = gridToPixi(seg.x, seg.y);
-      let box = new PIXI.Graphics();
-      box.beginFill(this.color, 0.9);
-      box.lineStyle(i === 0 ? 3 : 1, 0xffffff, i === 0 ? 0.8 : 0.3);
-      box.drawRoundedRect(0, 0, GRID, GRID, 6);
-      box.endFill();
-      box.x = px; box.y = py;
-      this.gfx.addChild(box);
-    }
   }
   occupies(x, y) {
     return this.body.some(seg => seg.x === x && seg.y === y);
@@ -210,37 +84,35 @@ class Snake {
     }
     return false;
   }
+  render() {
+    this.gfx.removeChildren();
+    for (let i = 0; i < this.body.length; ++i) {
+      let seg = this.body[i], [px, py] = gridToPixi(seg.x, seg.y);
+      let box = new PIXI.Graphics();
+      box.beginFill(this.color, 0.9);
+      box.lineStyle(i === 0 ? 3 : 1, 0xffffff, i === 0 ? 0.8 : 0.3);
+      box.drawRoundedRect(0, 0, GRID, GRID, 6);
+      box.endFill();
+      box.x = px; box.y = py;
+      this.gfx.addChild(box);
+    }
+  }
 }
 
-// --- GAME STATE & LOGIC ---
-let playerNames = { p1: "Player", p2: "AI" };
-let mode = "single", aiLevel = 1, running = false, currentMenu = null;
-let snakes = [], foods = [];
+// --- GAME STATE ---
+let snakes = [], foods = [], running = false, currentMenu = null;
 
-function resetGame(singlePlayer = true, level = 1) {
+// --- GAME LOGIC ---
+function resetGame() {
   for (let s of snakes) app.stage.removeChild(s.gfx);
   for (let f of foods) app.stage.removeChild(f.gfx);
   snakes = []; foods = [];
-  if (singlePlayer) {
-    playerNames = { p1: "Player", p2: "AI" };
-    snakes.push(new Snake(COLORS.player, 5, 5, {w:{x:0,y:-1},a:{x:-1,y:0},s:{x:0,y:1},d:{x:1,y:0}}, false, 1, playerNames.p1));
-    snakes.push(new Snake(COLORS.ai, COLS-6, ROWS-6, {ArrowUp:{x:0,y:-1},ArrowLeft:{x:-1,y:0},ArrowDown:{x:0,y:1},ArrowRight:{x:1,y:0}}, true, level, playerNames.p2));
-    mode = "single"; aiLevel = level;
-  } else {
-    if (isMobile) {
-      playerNames = { p1: "Bottom", p2: "Top" };
-    } else {
-      playerNames = { p1: "WASD", p2: "Arrows" };
-    }
-    snakes.push(new Snake(COLORS.player, 5, 5, {w:{x:0,y:-1},a:{x:-1,y:0},s:{x:0,y:1},d:{x:1,y:0}}, false, 1, playerNames.p1));
-    snakes.push(new Snake(COLORS.ai, COLS-6, ROWS-6, {ArrowUp:{x:0,y:-1},ArrowLeft:{x:-1,y:0},ArrowDown:{x:0,y:1},ArrowRight:{x:1,y:0}}, false, 1, playerNames.p2));
-    mode = "multi";
-  }
+  snakes.push(new Snake(COLORS.top, COLS - 6, 5, {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}, "Top"));
+  snakes.push(new Snake(COLORS.bottom, 5, ROWS - 6, {up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}, "Bottom"));
   for (let i = 0; i < 5; ++i) spawnFood();
   running = true;
   updateScoreDisplay();
   requestAnimationFrame(gameLoop);
-  showTouchControls(mode);
 }
 
 function spawnFood() {
@@ -253,16 +125,11 @@ function spawnFood() {
   foods.push(new Food(x, y));
 }
 
-window.addEventListener('keydown', e => {
-  for (let s of snakes) s.setDirection(e.key);
-  if (e.key === 'Escape' && running) showPauseMenu();
-});
-
 let lastTick = 0;
 function gameLoop(ts) {
   if (!running) return;
   if (ts - lastTick > 100) {
-    for (let s of snakes) s.move(foods, snakes);
+    for (let s of snakes) s.move();
     for (let s of snakes) {
       for (let i = foods.length-1; i >= 0; --i) {
         if (arraysEqual(s.body[0], foods[i])) {
@@ -270,13 +137,11 @@ function gameLoop(ts) {
           foods[i].destroy();
           foods.splice(i, 1);
           spawnFood();
-          eatSound.currentTime = 0; eatSound.play();
         }
       }
     }
     for (let s of snakes) {
       if (s.checkDeath(snakes)) {
-        dieSound.currentTime = 0; dieSound.play();
         running = false;
         showGameOverMenu(s);
       }
@@ -290,236 +155,100 @@ function gameLoop(ts) {
 }
 
 function updateScoreDisplay() {
-  scoreText.text = `${playerNames.p1}: ${snakes[0].body.length - 1}    ${playerNames.p2}: ${snakes[1].body.length - 1}`;
+  scoreTop.innerText = `Top: ${snakes[0].body.length - 1}`;
+  scoreBottom.innerText = `Bottom: ${snakes[1].body.length - 1}`;
 }
 
-// --- TOUCH CONTROLS SETUP ---
-const touchControls = document.getElementById('touchControls');
-const dpadWasd = document.getElementById('dpad-wasd');
-const dpadArrows = document.getElementById('dpad-arrows');
+// --- RESPONSIVE CANVAS ---
+function resizeCanvas() {
+  let w = window.innerWidth, h = window.innerHeight;
+  let scale = Math.min(w / WIDTH, h / HEIGHT, 1);
+  app.renderer.resize(WIDTH, HEIGHT);
+  app.view.style.width = (WIDTH * scale) + "px";
+  app.view.style.height = (HEIGHT * scale) + "px";
+  splitLine.style.top = (h / 2) + "px";
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
-function showTouchControls(mode) {
-  if (!isMobile) { touchControls.style.display = "none"; return; }
-  touchControls.style.display = "block";
-  if (mode === "multi") {
-    dpadWasd.style.display = "block";
-    dpadWasd.style.bottom = "20px";
-    dpadArrows.style.display = "block";
-    dpadArrows.style.top = "20px";
-  } else {
-    dpadWasd.style.display = "block";
-    dpadWasd.style.bottom = "20px";
-    dpadArrows.style.display = "none";
-    dpadArrows.style.top = "";
+// --- SWIPE CONTROLS ---
+let touchStartY = 0, touchStartX = 0;
+let swipeTarget = null;
+app.view.addEventListener('touchstart', e => {
+  if (e.touches.length > 0) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    let h = window.innerHeight;
+    swipeTarget = (touchStartY < h / 2) ? 0 : 1; // 0=Top, 1=Bottom
   }
-}
-function hideTouchControls() { touchControls.style.display = "none"; }
+});
+app.view.addEventListener('touchend', e => {
+  if (e.changedTouches.length > 0 && swipeTarget !== null) {
+    let dx = e.changedTouches[0].clientX - touchStartX;
+    let dy = e.changedTouches[0].clientY - touchStartY;
+    let absDx = Math.abs(dx), absDy = Math.abs(dy);
+    let dir = null;
+    if (absDx > absDy && absDx > 20) dir = dx > 0 ? 'right' : 'left';
+    else if (absDy > absDx && absDy > 20) dir = dy > 0 ? 'down' : 'up';
+    if (dir) {
+      let snake = snakes[swipeTarget];
+      let dmap = snake.controls;
+      if (dmap[dir]) snake.setDirection(dmap[dir]);
+    }
+    swipeTarget = null;
+  }
+});
 
-function setupDpad(dpad) {
-  Array.from(dpad.querySelectorAll('.dpad-btn')).forEach(btn => {
-    const key = btn.getAttribute('data-key');
-    btn.addEventListener('touchstart', e => {
-      e.preventDefault();
-      btn.classList.add('active');
-      triggerVirtualKey(key);
-    }, {passive:false});
-    btn.addEventListener('touchend', e => {
-      e.preventDefault();
-      btn.classList.remove('active');
-    }, {passive:false});
-    btn.addEventListener('touchcancel', e => {
-      btn.classList.remove('active');
-    });
-  });
-}
-setupDpad(dpadWasd);
-setupDpad(dpadArrows);
-
-function triggerVirtualKey(key) {
-  const e = new KeyboardEvent('keydown', {key});
-  window.dispatchEvent(e);
-}
+// --- DESKTOP KEYBOARD CONTROLS (for testing) ---
+window.addEventListener('keydown', e => {
+  // Top: Arrow keys
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+    let dmap = {ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'};
+    snakes[0].setDirection(snakes[0].controls[dmap[e.key]]);
+  }
+  // Bottom: WASD
+  if (['w','a','s','d'].includes(e.key)) {
+    let dmap = {w:'up',a:'left',s:'down',d:'right'};
+    snakes[1].setDirection(snakes[1].controls[dmap[e.key]]);
+  }
+});
 
 // --- MENUS ---
 function showMainMenu() {
   running = false;
-  if (currentMenu) {
-    try { document.body.removeChild(currentMenu); } catch(e){}
-    currentMenu = null;
-  }
+  if (currentMenu) document.body.removeChild(currentMenu);
   const menu = document.createElement('div');
-  menu.style.position = "absolute";
-  menu.style.top = "0";
-  menu.style.left = "0";
-  menu.style.width = "100vw";
-  menu.style.height = "100vh";
-  menu.style.display = "flex";
-  menu.style.flexDirection = "column";
-  menu.style.alignItems = "center";
-  menu.style.justifyContent = "center";
-  menu.style.background = "rgba(18,18,18,0.92)";
-  menu.style.zIndex = "20";
+  menu.className = "menu-overlay";
   menu.innerHTML = `
     <h1 style="color:#00ffff;">Snake Tail Battle</h1>
-    <button id="singleBtn" style="margin:10px 0;font-size:1.3rem;">Single Player</button>
-    <button id="multiBtn" style="margin:10px 0;font-size:1.3rem;">Two Players</button>
-    <div style="margin-top:30px;color:#00ffff;font-size:1.1rem;">
-      ${isMobile ? "Touch the arrows below to play on mobile!" : "Use keyboard or touch controls."}
-    </div>
+    <button id="twoPlayerBtn">Two Players (Split Screen)</button>
   `;
   document.body.appendChild(menu);
   currentMenu = menu;
-  document.getElementById('singleBtn').onclick = () => {
-    clickSound.currentTime = 0; clickSound.play();
+  document.getElementById('twoPlayerBtn').onclick = () => {
     document.body.removeChild(menu); currentMenu = null;
-    showLevelSelect();
+    resetGame();
   };
-  document.getElementById('multiBtn').onclick = () => {
-    clickSound.currentTime = 0; clickSound.play();
-    document.body.removeChild(menu); currentMenu = null;
-    resetGame(false, 1);
-    showTouchControls("multi");
-  };
-  hideTouchControls();
 }
-
-function showLevelSelect() {
-  if (currentMenu) document.body.removeChild(currentMenu);
-  const menu = document.createElement('div');
-  menu.style.position = "absolute";
-  menu.style.top = "0";
-  menu.style.left = "0";
-  menu.style.width = "100vw";
-  menu.style.height = "100vh";
-  menu.style.display = "flex";
-  menu.style.flexDirection = "column";
-  menu.style.alignItems = "center";
-  menu.style.justifyContent = "center";
-  menu.style.background = "rgba(18,18,18,0.92)";
-  menu.style.zIndex = "20";
-  let boxes = '';
-  const unlocked = getUnlockedLevel();
-  for (let i = 1; i <= 10; ++i) {
-    boxes += `<button class="levelBox" data-level="${i}" style="width:70px;height:70px;margin:0 8px;${i>unlocked?'background:#333;color:#888;pointer-events:none;opacity:0.5;':''}">${i}<div style="font-size:0.9rem;">${AI_LEVELS[i-1]}</div></button>`;
-  }
-  menu.innerHTML = `
-    <div style="color:#00ffff;font-size:2rem;margin-bottom:12px;">Select Level</div>
-    <div style="display:flex;flex-direction:row;gap:8px;margin-bottom:18px;">${boxes}</div>
-    <button id="backBtn" style="margin-top:10px;">Back</button>
-  `;
-  document.body.appendChild(menu);
-  currentMenu = menu;
-  document.querySelectorAll('.levelBox').forEach(btn => {
-    if (!btn.disabled) {
-      btn.onclick = () => {
-        clickSound.currentTime=0; clickSound.play();
-        document.body.removeChild(menu); currentMenu = null;
-        resetGame(true, parseInt(btn.getAttribute('data-level')));
-        showTouchControls("single");
-      };
-    }
-  });
-  document.getElementById('backBtn').onclick = () => { clickSound.currentTime=0; clickSound.play(); document.body.removeChild(menu); showMainMenu(); };
-  hideTouchControls();
-}
-
-function showPauseMenu() {
-  running = false;
-  if (currentMenu) document.body.removeChild(currentMenu);
-  const menu = document.createElement('div');
-  menu.style.position = "absolute";
-  menu.style.top = "0";
-  menu.style.left = "0";
-  menu.style.width = "100vw";
-  menu.style.height = "100vh";
-  menu.style.display = "flex";
-  menu.style.flexDirection = "column";
-  menu.style.alignItems = "center";
-  menu.style.justifyContent = "center";
-  menu.style.background = "rgba(18,18,18,0.92)";
-  menu.style.zIndex = "20";
-  menu.innerHTML = `
-    <h2 style="color:#00ffff;">Game Paused</h2>
-    <button id="continueBtn" style="margin:10px 0;">Continue</button>
-    <button id="mainMenuBtn" style="margin:10px 0;">Main Menu</button>
-  `;
-  document.body.appendChild(menu);
-  currentMenu = menu;
-  document.getElementById('continueBtn').onclick = () => {
-    clickSound.currentTime=0; clickSound.play();
-    document.body.removeChild(menu); currentMenu = null;
-    running = true; requestAnimationFrame(gameLoop);
-    showTouchControls(mode);
-  };
-  document.getElementById('mainMenuBtn').onclick = () => {
-    clickSound.currentTime=0; clickSound.play();
-    document.body.removeChild(menu); showMainMenu();
-  };
-  hideTouchControls();
-}
-
 function showGameOverMenu(deadSnake) {
   if (currentMenu) document.body.removeChild(currentMenu);
   const menu = document.createElement('div');
-  menu.style.position = "absolute";
-  menu.style.top = "0";
-  menu.style.left = "0";
-  menu.style.width = "100vw";
-  menu.style.height = "100vh";
-  menu.style.display = "flex";
-  menu.style.flexDirection = "column";
-  menu.style.alignItems = "center";
-  menu.style.justifyContent = "center";
-  menu.style.background = "rgba(18,18,18,0.92)";
-  menu.style.zIndex = "20";
-  let winner = '';
-  let nextLevelBtn = '';
-  if (mode === 'single') {
-    if (deadSnake.isAI) {
-      winner = 'You won!';
-      winSound.currentTime=0; winSound.play();
-      if (aiLevel < 10 && getUnlockedLevel() < aiLevel + 1) setUnlockedLevel(aiLevel + 1);
-      if (aiLevel < 10) {
-        nextLevelBtn = `<button id="nextLevelBtn" style="margin:10px 0;">Next Level</button>`;
-      }
-    } else {
-      winner = 'AI won!';
-      dieSound.currentTime=0; dieSound.play();
-    }
-  } else {
-    winner = (deadSnake.name === playerNames.p1)
-      ? `${playerNames.p2} won!`
-      : `${playerNames.p1} won!`;
-    winSound.currentTime=0; winSound.play();
-  }
+  menu.className = "menu-overlay";
+  let winner = deadSnake.name === "Top" ? "Bottom" : "Top";
   menu.innerHTML = `
-    <h2 style="color:#00ffff;">${winner}</h2>
-    ${nextLevelBtn}
-    <button id="restartBtn" style="margin:10px 0;">Restart</button>
-    <button id="mainMenuBtn" style="margin:10px 0;">Main Menu</button>
+    <h2 style="color:#00ffff;">${winner} wins!</h2>
+    <button id="restartBtn">Restart</button>
+    <button id="mainMenuBtn">Main Menu</button>
   `;
   document.body.appendChild(menu);
   currentMenu = menu;
-  if (nextLevelBtn) {
-    document.getElementById('nextLevelBtn').onclick = () => {
-      clickSound.currentTime=0; clickSound.play();
-      document.body.removeChild(menu); currentMenu = null;
-      resetGame(true, aiLevel + 1);
-      showTouchControls("single");
-    };
-  }
   document.getElementById('restartBtn').onclick = () => {
-    clickSound.currentTime=0; clickSound.play();
     document.body.removeChild(menu); currentMenu = null;
-    if (mode === 'single') resetGame(true, aiLevel);
-    else resetGame(false, 1);
-    showTouchControls(mode);
+    resetGame();
   };
   document.getElementById('mainMenuBtn').onclick = () => {
-    clickSound.currentTime=0; clickSound.play();
     document.body.removeChild(menu); showMainMenu();
   };
-  hideTouchControls();
 }
 
 // --- Start ---
