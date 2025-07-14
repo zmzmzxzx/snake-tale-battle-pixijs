@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Snake Tail Battle - PixiJS Mobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      background: #181818;
+      overflow: hidden;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      height: 100%;
+      width: 100%;
+      touch-action: none;
+    }
+    #gameContainer {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      position: relative;
+    }
+    .touch-controls {
+      position: absolute;
+      left: 0; right: 0;
+      width: 100vw;
+      pointer-events: none;
+      z-index: 30;
+    }
+    .dpad {
+      width: 120px;
+      height: 120px;
+      display: flex;
+      flex-wrap: wrap;
+      pointer-events: auto;
+      margin: 0 8vw;
+      user-select: none;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .dpad-btn {
+      width: 40px; height: 40px;
+      margin: 0;
+      background: rgba(0,255,255,0.18);
+      border: 2px solid #00ffff;
+      border-radius: 10px;
+      color: #00ffff;
+      font-size: 1.5rem;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 8px #00ffff33;
+      margin: 2px;
+      touch-action: none;
+      transition: background 0.1s;
+    }
+    .dpad-btn:active, .dpad-btn.active {
+      background: #00ffff;
+      color: #181818;
+    }
+    #dpad-wasd { bottom: 20px; }
+    #dpad-arrows { top: 20px; }
+    @media (max-width: 900px) {
+      #gameContainer, canvas {
+        width: 100vw !important;
+        height: 100vw !important;
+        max-width: 100vw !important;
+        max-height: 100vw !important;
+      }
+      .dpad { width: 90px; height: 90px; }
+      .dpad-btn { width: 28px; height: 28px; font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer"></div>
+  <div class="touch-controls" id="touchControls" style="display:none;">
+    <div class="dpad" id="dpad-arrows" style="display:none;">
+      <button class="dpad-btn" data-key="ArrowUp">&#8593;</button>
+      <div style="width:40px;"></div>
+      <button class="dpad-btn" data-key="ArrowLeft">&#8592;</button>
+      <button class="dpad-btn" data-key="ArrowDown">&#8595;</button>
+      <button class="dpad-btn" data-key="ArrowRight">&#8594;</button>
+    </div>
+    <div class="dpad" id="dpad-wasd" style="display:none;">
+      <button class="dpad-btn" data-key="w">&#8593;</button>
+      <div style="width:40px;"></div>
+      <button class="dpad-btn" data-key="a">&#8592;</button>
+      <button class="dpad-btn" data-key="s">&#8595;</button>
+      <button class="dpad-btn" data-key="d">&#8594;</button>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.2.4/dist/pixi.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
