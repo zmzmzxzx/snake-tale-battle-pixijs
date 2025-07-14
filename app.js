@@ -1,10 +1,12 @@
 // --- CONFIG ---
-const WIDTH = 800, HEIGHT = 600, GRID = 20, COLS = WIDTH / GRID, ROWS = HEIGHT / GRID;
+const BASE_WIDTH = 800, BASE_HEIGHT = 600, BASE_GRID = 20, BASE_COLS = 40, BASE_ROWS = 30;
 const COLORS = { player: 0xff6b6b, ai: 0x6bffd5, food: 0xffd56b };
 const AI_LEVELS = [
   "Novice", "Easy", "Normal", "Smart", "Skilled",
   "Advanced", "Expert", "Master", "Genius", "Impossible"
 ];
+
+let WIDTH = BASE_WIDTH, HEIGHT = BASE_HEIGHT, GRID = BASE_GRID, COLS = BASE_COLS, ROWS = BASE_ROWS;
 
 // --- PIXI APP ---
 const app = new PIXI.Application({ width: WIDTH, height: HEIGHT, backgroundColor: 0x181818, antialias: true });
@@ -32,6 +34,27 @@ function setUnlockedLevel(lvl) { localStorage.setItem('snake_unlocked_level', lv
 
 // --- DEVICE DETECTION ---
 let isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+
+// --- RESPONSIVE CANVAS & GRID ---
+function resizeGame() {
+  let w = window.innerWidth, h = window.innerHeight;
+  // 4:3 ratio by default, but fill screen if needed
+  let scale = Math.min(w / BASE_WIDTH, h / BASE_HEIGHT, 1);
+  WIDTH = Math.round(BASE_WIDTH * scale);
+  HEIGHT = Math.round(BASE_HEIGHT * scale);
+  app.renderer.resize(WIDTH, HEIGHT);
+  // Dynamically scale grid and cols/rows
+  GRID = Math.floor(Math.min(WIDTH / BASE_COLS, HEIGHT / BASE_ROWS));
+  COLS = Math.floor(WIDTH / GRID);
+  ROWS = Math.floor(HEIGHT / GRID);
+  scoreText.x = WIDTH / 2;
+  scoreText.y = 10;
+}
+window.addEventListener('resize', () => {
+  resizeGame();
+  updateScoreDisplay();
+});
+resizeGame();
 
 // --- ENTITY CLASSES ---
 class Food {
@@ -269,18 +292,6 @@ function gameLoop(ts) {
 function updateScoreDisplay() {
   scoreText.text = `${playerNames.p1}: ${snakes[0].body.length - 1}    ${playerNames.p2}: ${snakes[1].body.length - 1}`;
 }
-
-// --- RESPONSIVE CANVAS ---
-function resizeCanvas() {
-  let w = window.innerWidth, h = window.innerHeight;
-  let scale = Math.min(w / WIDTH, h / HEIGHT, 1);
-  app.view.style.width = (WIDTH * scale) + "px";
-  app.view.style.height = (HEIGHT * scale) + "px";
-  app.view.style.maxWidth = "100vw";
-  app.view.style.maxHeight = "100vh";
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
 
 // --- TOUCH CONTROLS SETUP ---
 const touchControls = document.getElementById('touchControls');
