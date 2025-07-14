@@ -9,7 +9,7 @@ document.getElementById('gameContainer').appendChild(app.view);
 // --- DOM ---
 const scoreText = document.getElementById('scoreText');
 
-// --- SOUND ---
+// --- SOUNDS ---
 const eatSound = new Audio('eat.mp3');
 const dieSound = new Audio('die.mp3');
 const winSound = new Audio('win.mp3');
@@ -19,6 +19,8 @@ const clickSound = new Audio('click.mp3');
 function gridToPixi(x, y, gridSize) { return [x * gridSize, y * gridSize]; }
 function randomGrid(cols, rows) { return { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) }; }
 function arraysEqual(a, b) { return a.x === b.x && a.y === b.y; }
+function getUnlockedLevel() { return parseInt(localStorage.getItem('snake_unlocked_level') || '1', 10); }
+function setUnlockedLevel(lvl) { localStorage.setItem('snake_unlocked_level', lvl); }
 
 // --- DEVICE DETECTION ---
 const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
@@ -35,7 +37,9 @@ let aiLevel = 1;
 
 // --- RESIZE & SCALE ---
 function resizeGame() {
-  let w = window.innerWidth, h = window.innerHeight;
+  let w = window.innerWidth;
+  let h = window.innerHeight;
+
   if (mode === "multi" && isMobile) {
     WIDTH = w;
     HEIGHT = h;
@@ -81,13 +85,14 @@ class Food {
 }
 
 class Snake {
-  constructor(color, x, y, controls, isAI = false, name = '') {
+  constructor(color, x, y, controls, isAI = false, aiLevel = 1, name = '') {
     this.color = color;
     this.body = [{ x, y }];
     this.dir = { x: 1, y: 0 };
     this.nextDir = { x: 1, y: 0 };
     this.grow = 3;
     this.isAI = isAI;
+    this.aiLevel = aiLevel;
     this.name = name;
     this.controls = controls;
     this.alive = true;
@@ -153,6 +158,9 @@ class Snake {
 const controlsWASD = { w: {x:0,y:-1}, a: {x:-1,y:0}, s: {x:0,y:1}, d: {x:1,y:0} };
 const controlsArrows = { ArrowUp: {x:0,y:-1}, ArrowLeft: {x:-1,y:0}, ArrowDown: {x:0,y:1}, ArrowRight: {x:1,y:0} };
 
+// --- PLAYER NAMES ---
+let playerNames = { p1: "Player", p2: "AI" };
+
 // --- RESET GAME ---
 function resetGame(selectedMode = "single") {
   mode = selectedMode;
@@ -162,16 +170,16 @@ function resetGame(selectedMode = "single") {
 
   if (mode === "single") {
     playerNames = { p1: "Player", p2: "AI" };
-    snakes.push(new Snake(COLORS.top, 5, 5, controlsWASD, false, playerNames.p1));
-    snakes.push(new Snake(COLORS.bottom, COLS - 6, ROWS - 6, controlsArrows, true, playerNames.p2));
+    snakes.push(new Snake(COLORS.top, 5, 5, controlsWASD, false, 1, playerNames.p1));
+    snakes.push(new Snake(COLORS.bottom, COLS - 6, ROWS - 6, controlsArrows, true, 1, playerNames.p2));
   } else {
     if (isMobile) {
       playerNames = { p1: "Bottom", p2: "Top" };
     } else {
       playerNames = { p1: "WASD", p2: "Arrows" };
     }
-    snakes.push(new Snake(COLORS.bottom, 5, ROWS - 6, controlsWASD, false, playerNames.p1));
-    snakes.push(new Snake(COLORS.top, COLS - 6, 5, controlsArrows, false, playerNames.p2));
+    snakes.push(new Snake(COLORS.bottom, 5, ROWS - 6, controlsWASD, false, 1, playerNames.p1));
+    snakes.push(new Snake(COLORS.top, COLS - 6, 5, controlsArrows, false, 1, playerNames.p2));
   }
 
   for (let i = 0; i < 5; ++i) spawnFood();
